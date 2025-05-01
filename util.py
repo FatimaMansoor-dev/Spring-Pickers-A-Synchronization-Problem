@@ -1,6 +1,8 @@
 import multiprocessing as mp
 import random
 
+
+
 class SharedResources:
     """
     Encapsulates shared state and synchronization primitives.
@@ -58,10 +60,9 @@ class Picker(mp.Process):
 
     def run(self):
         while True:
-            # Tree lock acquire (non-blocking to avoid false waiting)
-            if not self.res.tree_lock.acquire(block=False):
-                print_event(self.name, 'waiting tree', self.res)
-                self.res.tree_lock.acquire()
+            # Tree lock acquire - always block for fairness
+            print_event(self.name, 'waiting tree', self.res)
+            self.res.tree_lock.acquire()
             # Now acquired
             print_event(self.name, 'acquired tree', self.res)
             try:
@@ -75,16 +76,14 @@ class Picker(mp.Process):
                 # release teh lock
                 self.res.tree_lock.release()
 
-            # Slot semaphore acquire, again non blocking to avoid false waiting
-            if not self.res.slots_sem.acquire(block=False):
-                print_event(self.name, 'waiting slot', self.res)
-                self.res.slots_sem.acquire()
+            # Slot semaphore acquire - always block for fairness
+            print_event(self.name, 'waiting slot', self.res)
+            self.res.slots_sem.acquire()
             print_event(self.name, 'got slot', self.res)
 
-            # Crate lock acquire
-            if not self.res.crate_lock.acquire(block=False):
-                print_event(self.name, 'waiting crate', self.res)
-                self.res.crate_lock.acquire()
+            # Crate lock acquire - always block for fairness
+            print_event(self.name, 'waiting crate', self.res)
+            self.res.crate_lock.acquire()
             print_event(self.name, 'acquired crate', self.res)
             try:
                 # add fruit to crate
@@ -92,7 +91,7 @@ class Picker(mp.Process):
                 slot = self.res.crate_count.value + 1
                 self.res.crate_count.value = slot
                 print_event(self.name, f'stored {slot}', self.res)
-                #check if crate is full
+                # check if crate is full
                 if slot == self.res.crate_capacity:
                     print_event(self.name, 'crate full', self.res)
                     self.res.full_crate_sem.release()
@@ -117,13 +116,12 @@ class Loader(mp.Process):
             self.res.full_crate_sem.acquire()
             print_event('Loader', 'got full', self.res)
 
-            # Crate lock acquire
-            if not self.res.crate_lock.acquire(block=False):
-                print_event('Loader', 'waiting crate', self.res)
-                self.res.crate_lock.acquire()
+            # Crate lock acquire - always block for fairness
+            print_event('Loader', 'waiting crate', self.res)
+            self.res.crate_lock.acquire()
             print_event('Loader', 'acquired crate', self.res)
             try:
-                # if done, seeif partial hain ya nh
+                # if done, see if partial hain ya nh
                 if self.res.done.value:
                     if self.res.crate_count.value > 0:
                         print_event('Loader', f'partial {self.res.crate_count.value}', self.res)
