@@ -7,6 +7,8 @@ class SharedResources:
     """
     def __init__(self, num_fruits, crate_capacity, process_names, header_line, separator):
         manager = mp.Manager()
+
+        # printing wali cheez hai nothing important
         self.process_names = process_names
         self.header_line = header_line
         self.separator = separator
@@ -16,22 +18,22 @@ class SharedResources:
         self.crate = manager.list()
 
         # Synchronization primitives
-        self.tree_lock = mp.Lock()
+        self.tree_lock = mp.Lock()  # locks take care of mutual exclusion
         self.crate_lock = mp.Lock()
-        self.slots_sem = mp.Semaphore(crate_capacity)
-        self.full_crate_sem = mp.Semaphore(0)
+        self.slots_sem = mp.Semaphore(crate_capacity) # semaphore to limit the number of fruits in the crate
+        self.full_crate_sem = mp.Semaphore(0) # semaphore to signal that the crate is full
 
-        # Printing lock
+        # Printing lock (When multiple processes all do print() at the same time, their output can get interleaved on the console, producing jumbled lines )
         self.print_lock = mp.Lock()
 
         # Termination flag
         self.done = mp.Value('b', False)
 
-        # Crate counter
+        # Crate counter  - takes care of empty slots
         self.crate_count = mp.Value('i', 0)
-        self.crate_capacity = crate_capacity
+        self.crate_capacity = crate_capacity # (12)
 
-        # Process states
+        # Process states - for printing
         self.states = manager.dict({name: 'idle' for name in process_names})
 
 
@@ -63,14 +65,17 @@ class Picker(mp.Process):
             # Now acquired
             print_event(self.name, 'acquired tree', self.res)
             try:
+                # if tree empty, exit
                 if not self.res.tree:
                     break
+                # warna pop random
                 fruit = self.res.tree.pop(random.randrange(len(self.res.tree)))
                 print_event(self.name, f'picked {fruit}', self.res)
             finally:
+                # release teh lock
                 self.res.tree_lock.release()
 
-            # Slot semaphore acquire
+            # Slot semaphore acquire, again non blocking to avoid false waiting
             if not self.res.slots_sem.acquire(block=False):
                 print_event(self.name, 'waiting slot', self.res)
                 self.res.slots_sem.acquire()
@@ -82,10 +87,12 @@ class Picker(mp.Process):
                 self.res.crate_lock.acquire()
             print_event(self.name, 'acquired crate', self.res)
             try:
+                # add fruit to crate
                 self.res.crate.append(fruit)
                 slot = self.res.crate_count.value + 1
                 self.res.crate_count.value = slot
                 print_event(self.name, f'stored {slot}', self.res)
+                #check if crate is full
                 if slot == self.res.crate_capacity:
                     print_event(self.name, 'crate full', self.res)
                     self.res.full_crate_sem.release()
@@ -106,6 +113,7 @@ class Loader(mp.Process):
     def run(self):
         while True:
             print_event('Loader', 'waiting full', self.res)
+            # Wait for a full crate 
             self.res.full_crate_sem.acquire()
             print_event('Loader', 'got full', self.res)
 
@@ -115,6 +123,7 @@ class Loader(mp.Process):
                 self.res.crate_lock.acquire()
             print_event('Loader', 'acquired crate', self.res)
             try:
+                # if done, seeif partial hain ya nh
                 if self.res.done.value:
                     if self.res.crate_count.value > 0:
                         print_event('Loader', f'partial {self.res.crate_count.value}', self.res)
@@ -122,6 +131,8 @@ class Loader(mp.Process):
                     break
                 cnt = self.res.crate_count.value
                 print_event('Loader', f'loading {cnt}', self.res)
+
+                # empty the crate
                 self.res.crate[:] = []
                 self.res.crate_count.value = 0
                 print_event('Loader', 'emptied crate', self.res)

@@ -1,10 +1,12 @@
 import argparse
 from multiprocessing import set_start_method
 import multiprocessing as mp
-from util import SharedResources, print_event, Picker, Loader
+from util import *
 
 
 def run_orchard(num_fruits, num_pickers, crate_capacity):
+
+    ## just the printing stuff
     process_names = [f"Picker-{i}" for i in range(1, num_pickers + 1)] + ["Loader"]
     header_line = " | ".join(f"{name:^15}" for name in process_names)
     separator = "-" * len(header_line)
@@ -17,6 +19,8 @@ def run_orchard(num_fruits, num_pickers, crate_capacity):
     loader = Loader(resources)
     pickers = [Picker(i, resources) for i in range(1, num_pickers + 1)]
 
+
+    ## start everything
     loader.start()
     for p in pickers:
         p.start()
@@ -29,7 +33,7 @@ def run_orchard(num_fruits, num_pickers, crate_capacity):
 
 
 if __name__ == "__main__":
-    set_start_method('spawn')  # ensure consistent behavior on Windows
+    set_start_method('spawn') 
     parser = argparse.ArgumentParser()
     parser.add_argument("--fruits", "-f", type=int, default=26)
     parser.add_argument("--pickers", "-p", type=int, default=3)
