@@ -55,12 +55,10 @@ pip install pygame colorama
    git clone https://github.com/FatimaMansoor-dev/Spring-Pickers-A-Synchronization-Problem
 
    ```
-````
 
 2. **Install dependencies**:
    ```bash
 pip install -r requirements.txt
-````
 
 
 ## Configuration
@@ -136,6 +134,4 @@ Contributions, issues, and feature requests are welcome! Please follow these ste
 4. Push to the branch: `git push origin feature/YourFeature`.
 5. Open a pull request.
 
-## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
