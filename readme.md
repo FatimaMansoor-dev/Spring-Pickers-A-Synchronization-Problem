@@ -52,10 +52,9 @@ pip install pygame colorama
 1. **Clone the repository**:
 
    ```bash
+   git clone https://github.com/FatimaMansoor-dev/Spring-Pickers-A-Synchronization-Problem
+
    ```
-
-git clone https://github.com/FatimaMansoor-dev/Spring-Pickers-A-Synchronization-Problem
-
 ````
 
 2. **Install dependencies**:
