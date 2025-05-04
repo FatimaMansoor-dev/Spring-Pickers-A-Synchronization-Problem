@@ -1,7 +1,9 @@
 import multiprocessing as mp
 import random
+from colorama import Fore, Back, Style, init
 
-
+# Initialize colorama
+init(autoreset=True)
 
 class SharedResources:
     """
@@ -15,9 +17,12 @@ class SharedResources:
         self.header_line = header_line
         self.separator = separator
 
-        # Shared containers
-        self.tree = manager.list(range(1, num_fruits + 1))
+        # Shared containers - store (index, value) pairs for fruits
+        self.tree = manager.list([(i, i) for i in range(1, num_fruits + 1)])
         self.crate = manager.list()
+
+        # Previous states for color highlighting
+        self.prev_states = manager.dict({name: 'idle' for name in process_names})
 
         # Synchronization primitives
         self.tree_lock = mp.Lock()  # locks take care of mutual exclusion
@@ -39,15 +44,50 @@ class SharedResources:
         self.states = manager.dict({name: 'idle' for name in process_names})
 
 
+def get_state_color(state):
+    """
+    Return color code based on the state.
+    """
+    if 'waiting' in state:
+        return Fore.YELLOW
+    elif 'acquired' in state or 'got' in state:
+        return Fore.GREEN
+    elif 'picked' in state or 'stored' in state:
+        return Fore.CYAN
+    elif 'full' in state:
+        return Fore.MAGENTA + Style.BRIGHT
+    elif 'loading' in state or 'emptied' in state:
+        return Fore.BLUE + Style.BRIGHT
+    elif 'exiting' in state:
+        return Fore.RED
+    else:
+        return Fore.WHITE
+
+
 def print_event(active, message, resources):
     """
-    Update active state and print a snapshot of all process states.
+    Update active state and print a snapshot of all process states with color.
     """
     with resources.print_lock:
+        # Store previous state and update current state
+        resources.prev_states[active] = resources.states.get(active, 'idle')
         resources.states[active] = message
-        cols = [f"{resources.states[name]:^15}" for name in resources.process_names]
+        
+        # Format columns with appropriate colors
+        cols = []
+        for name in resources.process_names:
+            state = resources.states[name]
+            # Highlight the active process with a different background
+            if name == active:
+                col_text = Back.BLUE + Fore.WHITE + Style.BRIGHT + f"{state:^15}" + Style.RESET_ALL
+            else:
+                # Color based on state
+                color = get_state_color(state)
+                col_text = color + f"{state:^15}"
+            cols.append(col_text)
+        
         print(" | ".join(cols))
-        print(resources.separator)
+        print(Fore.WHITE + Style.DIM + resources.separator)
 
 
 class Picker(mp.Process):
@@ -69,9 +109,10 @@ class Picker(mp.Process):
                 # if tree empty, exit
                 if not self.res.tree:
                     break
-                # warna pop random
-                fruit = self.res.tree.pop(random.randrange(len(self.res.tree)))
-                print_event(self.name, f'picked {fruit}', self.res)
+                # Pop random fruit (index, value pair)
+                random_idx = random.randrange(len(self.res.tree))
+                fruit_idx, fruit_val = self.res.tree.pop(random_idx)
+                print_event(self.name, f'picked #{fruit_idx}:{fruit_val}', self.res)
             finally:
                 # release teh lock
                 self.res.tree_lock.release()
@@ -86,11 +127,11 @@ class Picker(mp.Process):
             self.res.crate_lock.acquire()
             print_event(self.name, 'acquired crate', self.res)
             try:
-                # add fruit to crate
-                self.res.crate.append(fruit)
+                # add fruit (index, value) to crate
+                self.res.crate.append((fruit_idx, fruit_val))
                 slot = self.res.crate_count.value + 1
                 self.res.crate_count.value = slot
-                print_event(self.name, f'stored {slot}', self.res)
+                print_event(self.name, f'stored #{fruit_idx} in {slot}', self.res)
                 # check if crate is full
                 if slot == self.res.crate_capacity:
                     print_event(self.name, 'crate full', self.res)
@@ -124,11 +165,14 @@ class Loader(mp.Process):
                 # if done, see if partial hain ya nh
                 if self.res.done.value:
                     if self.res.crate_count.value > 0:
-                        print_event('Loader', f'partial {self.res.crate_count.value}', self.res)
+                        fruit_indices = [f"#{idx}" for idx, _ in self.res.crate]
+                        print_event('Loader', f'partial {self.res.crate_count.value} {",".join(fruit_indices)}', self.res)
                     print_event('Loader', 'exiting', self.res)
                     break
+                
                 cnt = self.res.crate_count.value
-                print_event('Loader', f'loading {cnt}', self.res)
+                fruit_indices = [f"#{idx}" for idx, _ in self.res.crate]
+                print_event('Loader', f'loading {cnt} {",".join(fruit_indices)}', self.res)
 
                 # empty the crate
                 self.res.crate[:] = []
